@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Complex icons</title>
+    <style>
+      html, body, #map-canvas {
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+    </style>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.1.1/js/bootstrap.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+
+    <script>
+// The following example creates complex markers to indicate beaches near
+// Sydney, NSW, Australia. Note that the anchor is set to
+// (0,32) to correspond to the base of the flagpole.
+
+function initialize() {
+  var mapOptions = {
+    zoom: 15,
+    center: new google.maps.LatLng(51.503843006939000000, -0.105091836006184110),
+    styles: 
+    [
+    {
+        "featureType": "poi",
+        "elementType": "labels",
+        "stylers": [
+            {
+                "visibility": "off"
+            }
+        ]
+    },
+    {
+        "featureType": "transit",
+        "stylers": [
+            {
+                "visibility": "off"
+            }
+        ]
+    }
+]
+  }
+  var map = new google.maps.Map(document.getElementById('map-canvas'),
+                                mapOptions);
+
+  setMarkers(map);
+}
+
+/**
+ * Data for the markers consisting of a name, a LatLng and a zIndex for
+ * the order in which these markers should display on top of each
+ * other.
+ */
+
+function setMarkers(map) {
+  // Add markers to the map
+
+  // Marker sizes are expressed as a Size of X,Y
+  // where the origin of the image (0,0) is located
+  // in the top left of the image.
+
+  // Origins, anchor positions and coordinates of the marker
+  // increase in the X direction to the right and in
+  // the Y direction down.
+  var image = {
+    url: 'images/roundel-tube.png',
+    // This marker is 20 pixels wide by 32 pixels tall.
+    size: new google.maps.Size(32, 28),
+    // The origin for this image is 0,0.
+    origin: new google.maps.Point(0,0),
+    // The anchor for this image is the base of the flagpole at 0,32.
+    anchor: new google.maps.Point(0, 28)
+  };
+  // Shapes define the clickable region of the icon.
+  // The type defines an HTML &lt;area&gt; element 'poly' which
+  // traces out a polygon as a series of X,Y points. The final
+  // coordinate closes the poly by connecting to the first
+  // coordinate.
+  var shape = {
+      coord: [1, 1, 1, 32, 32, 28, 28 , 1],
+      type: 'poly'
+  };
+
+  infowindow = new google.maps.InfoWindow({
+  content: "holding..."
+  });
+
+
+  $.getJSON( "/api/v1/london/stations", function( data ) {
+    $.each( data, function( key, val ) {
+
+      var myLatLng = new google.maps.LatLng(val.latitude, val.longditude);
+      var marker = new google.maps.Marker({
+          position: myLatLng,
+          map: map,
+          icon: image,
+          shape: shape,
+          title: val.stationName,
+          zIndex: 1
+      });
+
+      google.maps.event.addListener(marker, 'click', function() {
+        infowindow.setContent(val.stationName);
+
+        $.getJSON( "/api/v1/london/station/" + decodeURIComponent(key), function( data ) {
+          console.log(data);
+          $('#mod-accessibility').html('');
+          $('#mod-addinfo').html('None');
+          $('#mod-lineinfo').html('');
+          if (data.error) {
+            $('#mod-addinfo').html('<strong>'+data.error+'</strong>');
+          } else {
+            $('#mod-accessibility').html(data.Accessibility.AccessType);
+            $('#mod-addinfo').html(data.Accessibility.AdditionalAccessibilityInformation);
+            if (data.Lines == '    ') {
+              $('#mod-addinfo').html('<strong>No Additional Information Available</strong>');
+            } else if (data.Lines.Line.StepMin != undefined) {
+              $('#mod-lineinfo').append('<div><span>'+data.Lines.Line.LineName+' ' + data.Lines.Line.Direction +
+                  ' Gap: ' + procGap(data.Lines.Line) + ' Step: ' + procStep(data.Lines.Line) +
+                  '</span></div>');
+            } else {
+              for (var i=0; i < data.Lines.Line.length; i++) {
+                $('#mod-lineinfo').append('<div><span>'+data.Lines.Line[i].LineName+' ' + data.Lines.Line[i].Direction +
+                  ' Gap: ' + procGap(data.Lines.Line[i]) + ' Step: ' + procStep(data.Lines.Line[i]) +
+                  '</span></div>');
+              }
+            }
+          }
+
+
+        });
+
+
+        $('#modelTitle').html(val.stationName);
+        $('#modal-id').modal('toggle');
+
+        // infowindow.open(map,marker);
+      });
+      console.log(key);
+    });
+
+  });
+
+}
+
+function procGap(stationInfo) {
+  if (stationInfo.LevelAccessByManualRamp == 'Yes') {
+    console.log('ramp');
+    return('Ramp');
+  }
+  if (stationInfo.GapMax < 86) {
+    return('good');
+  } else if (stationInfo.GapMax < 181) {
+    return('ok');
+  } else {
+    return('bad');
+  }
+}
+
+function procStep(stationInfo) {
+  if (stationInfo.LevelAccessByManualRamp == 'Yes') {
+    return('Ramp');
+  }
+  if (stationInfo.StepMax < 51) {
+    return('good');
+  } else if (stationInfo.StepMax < 121) {
+    return('ok');
+  } else {
+    return('bad');
+  }
+}
+
+
+google.maps.event.addDomListener(window, 'load', initialize);
+
+    </script>
+  </head>
+  <body>
+    
+    <div class="modal fade" id="modal-id">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+            <h4 id="modelTitle" class="modal-title">Modal title</h4>
+          </div>
+          <div id="modalBody" class="modal-body">
+            <div>Accessibility: <span id="mod-accessibility"></span></div>
+            <div>Additional info: <span id="mod-addinfo"></span></div>
+            <div>Lines: <span id="mod-lineinfo"></span></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+          </div>
+        </div><!-- /.modal-content -->
+      </div><!-- /.modal-dialog -->
+    </div><!-- /.modal -->
+    <div id="map-canvas"></div>
+  </body>
+</html>
